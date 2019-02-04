@@ -40,7 +40,7 @@
     </div>
 
     <div class="fixed-action-btn" style="bottom: 45px; right: 24px;">
-        <a class="btn-floating btn-large waves-effect waves-light red"><i class="material-icons">add</i></a>
+        <a class="btn-floating btn-large waves-effect waves-light red" onclick='initMemo();'><i class="material-icons">add</i></a>
     </div>
 
     <div class="preloader-wrapper big active" style="position:absolute; z-index:1000; left:50%; top:50%; display:none;">
@@ -61,5 +61,134 @@
 
       <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.8/js/materialize.min.js"></script>
 
+      <script src="https://www.gstatic.com/firebasejs/5.7.2/firebase.js"></script>
+      <script>
+        // Initialize Firebase
+        var config = {
+          apiKey: "AIzaSyAQ6qWuPuR_NXcqxAmxS6gFJa1UCrL3FZ8",
+          authDomain: "memowebapp-e4ddd.firebaseapp.com",
+          databaseURL: "https://memowebapp-e4ddd.firebaseio.com",
+          projectId: "memowebapp-e4ddd",
+          storageBucket: "memowebapp-e4ddd.appspot.com",
+          messagingSenderId: "1081039675387"
+        }
+        firebase.initializeApp(config);
+        var auth, database, userInfo, selectedKey;
+        auth = firebase.auth();
+        database = firebase.database();
+        var authProvider = new firebase.auth.GoogleAuthProvider();
+        
+        auth.onAuthStateChanged((user)=>{
+          if (user) {
+            console.log("success");
+            userInfo = user;
+            get_memo_list();
+          } else {
+            console.log("fail");
+            auth.signInWithPopup(authProvider);
+          }
+        });
+
+
+
+        function get_memo_list(){
+          console.log(userInfo.uid);
+          var memoRef = database.ref('memos/'+userInfo.uid);
+          console.log("memoRef:"+memoRef);
+          // memos - uid - key(automatically created)
+          memoRef.on('child_added', on_child_added);
+          //child가 added되면 on_child_added 함수가 불러와진다.
+          // firebase는 callback으로 자료 받아온다.
+          memoRef.on('child_changed', (data)=>{
+            var key = data.key;
+            var txt = data.val().txt+"";
+            var title = txt.substr(0, txt.indexOf('\n'));
+            var firstTxt = txt.substr(0, 1);
+            
+            $("#"+key+"> .firstTxt").text(firstTxt);
+            $("#"+key+"> .title").text(title);
+            $("#"+key+"> .txt").text(txt);
+          });
+        }
+
+
+
+        function on_child_added(data){
+          /*
+          { txt:, title:, updateDate:, createDate:,}
+          */
+          var key = data.key;
+          var memoData = data.val();
+          console.log("memoData: "+memoData.txt);
+          var txt = memoData.txt+"";
+          var title = txt.substr(0, txt.indexOf('\n'));
+          var firstTxt = txt.substr(0, 1);
+          console.log("first:"+firstTxt)
+            
+          var html =
+              "<li id='"+ key +"' class=\"collection-item avatar\" onclick=\"fn_get_data_one(this.id);\" >" +
+              "<i class=\"material-icons circle red firstTxt\">" + firstTxt + "</i>" +
+              "<span class=\"title\">" + title + "</span>" +
+              "<p class='txt'>" + txt + "<br>" +
+              "</p>" +
+              "<a href=\"#!\" onclick=\"fn_delete_data('"+key+"')\"class=\"secondary-content\"><i class=\"material-icons\">grade</i></a>"+
+              "</li>";
+
+              $(".collection").append(html); 
+          }
+          function initMemo(){
+            $(".textarea").val('');
+            selectedKey = null;
+          }
+
+          function save_data() {
+            var txt = $(".textarea").val();
+            if ( txt == '' ) {
+              return;
+            }
+            if ( selectedKey ) {
+              var memoRef = database.ref('memos/'+userInfo.uid+'/'+selectedKey);
+              memoRef.update({
+                txt: txt,
+                // createDate: new Date().getTime(),
+                updateDate: new Date().getTime()
+              });
+            } else {
+              var memoRef = database.ref('memos/'+userInfo.uid);
+              //push
+              selectedKey = memoRef.push({
+                txt: txt,
+                createDate: new Date().getTime(),
+              }).key;
+            }
+            $(".textarea").val('')
+            //new Date()는 object형이라서 안됨.
+          }
+
+          function fn_get_data_one(key){
+            selectedKey = key;
+            var memoRef = database.ref('memos/'+userInfo.uid+'/'+key).once('value').then(
+              (snapshot)=>{
+                var txt = $(".textarea").val(snapshot.val().txt);
+            });
+            //once는 on()같은 건데 한건만 가지고 올때
+            $(".textarea").focus();
+          }
+          function fn_delete_data(key){
+            if (!confirm('Delete?')){
+              return;
+            }
+            var memoRef = database.ref('memos/'+userInfo.uid+'/'+key);
+            memoRef.remove();
+            $("#"+key).remove();
+            initMemo();
+          }
+
+          $(()=>{ 
+            $(".textarea").blur(()=>{
+              save_data();
+            })
+          });
+      </script>
     </body>
   </html>
